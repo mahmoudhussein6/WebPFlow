@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #2dd4bf;
+  --color-secondary: #818cf8;
+  --color-accent: #f472b6;
+  --color-bg-dark: #030712;
+  --color-bg-surface: #111827;
+  
+  --font-outfit: 'Outfit', sans-serif;
+  --font-sora: 'Sora', sans-serif;
+}
+
+:root {
+  --primary: #2dd4bf;
+  --secondary: #818cf8;
+  --accent: #f472b6;
+}
+
+body {
+  @apply bg-bg-dark text-white font-outfit min-h-screen overflow-x-hidden;
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(171, 66%, 50%, 0.1) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, hsla(239, 84%, 67%, 0.1) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, hsla(171, 66%, 50%, 0.05) 0px, transparent 50%);
+  background-attachment: fixed;
+}
