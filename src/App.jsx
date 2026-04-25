@@ -4,6 +4,7 @@ import Header from './components/Header';
 import HistoryPanel from './components/HistoryPanel';
 import Stepper from './components/Stepper';
 import Footer from './components/Footer';
+import SplashScreen from './components/SplashScreen';
 import { Loader2 } from 'lucide-react';
 
 // Step Components - Lazy Loading for Performance
@@ -33,12 +34,14 @@ function App() {
   const [previewFile, setPreviewFile] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
+  
+  // Splash Screen State
+  const [showSplash, setShowSplash] = useState(true);
 
   // Lifecycle
   useEffect(() => {
     refreshHistory();
     return () => {
-      // Memory Cleanup: Revoke all object URLs on unmount
       files.forEach(f => {
         if (f.preview) URL.revokeObjectURL(f.preview);
         if (f.originalPreview) URL.revokeObjectURL(f.originalPreview);
@@ -61,10 +64,9 @@ function App() {
     refreshHistory();
   };
 
-  // Web Worker Management
+  // Image Processing Engine
   const processImageInWorker = useCallback((fileObj, currentSettings) => {
     return new Promise((resolve, reject) => {
-      // Create worker instance (Vite handles this syntax)
       const worker = new Worker(new URL('./utils/processor.worker.js', import.meta.url), { type: 'module' });
       
       worker.onmessage = (e) => {
@@ -128,23 +130,20 @@ function App() {
     setCurrentStep(1);
   };
 
-  // Optimization Trigger - With Concurrency Control
+  // Optimization Trigger
   const processAll = async () => {
     setIsProcessingAll(true);
     const updatedFiles = [...files];
-    const CONCURRENCY_LIMIT = 4; // Process 4 images at a time
+    const CONCURRENCY_LIMIT = 4;
     
     const queue = [...Array(updatedFiles.length).keys()].filter(i => updatedFiles[i].status !== 'completed');
     
     const processNext = async () => {
       if (queue.length === 0) return;
-      
       const index = queue.shift();
       const file = updatedFiles[index];
-      
       updatedFiles[index].status = 'processing';
       setFiles([...updatedFiles]);
-      
       try {
         const result = await processImageInWorker(file, settings);
         const completedFile = { ...updatedFiles[index], ...result, status: 'completed' };
@@ -156,20 +155,16 @@ function App() {
         updatedFiles[index].status = 'error';
         setFiles([...updatedFiles]);
       }
-      
       await processNext();
     };
 
-    // Start workers up to limit
     const workers = Array(Math.min(CONCURRENCY_LIMIT, queue.length)).fill(null).map(() => processNext());
     await Promise.all(workers);
-    
     refreshHistory();
     setIsProcessingAll(false);
     setCurrentStep(3);
   };
 
-  // Export Handlers
   const downloadFile = (file) => {
     const link = document.createElement('a');
     link.href = file.preview || (file.blob ? URL.createObjectURL(file.blob) : '');
@@ -217,7 +212,11 @@ function App() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col font-outfit selection:bg-primary/30">
+    <div className="flex min-h-screen flex-col font-outfit selection:bg-primary/30 overflow-hidden">
+      <AnimatePresence>
+        {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
+      </AnimatePresence>
+
       <Helmet>
         <title>{`WebPFlow Studio | ${stepTitles[currentStep]}`}</title>
         <meta name="description" content="High-performance client-side WebP image optimizer." />
