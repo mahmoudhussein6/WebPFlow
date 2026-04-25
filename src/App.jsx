@@ -1,10 +1,12 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet-async';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import HistoryPanel from './components/HistoryPanel';
 import Stepper from './components/Stepper';
 import Footer from './components/Footer';
 import SplashScreen from './components/SplashScreen';
+import NotFound from './components/NotFound';
 import { Loader2 } from 'lucide-react';
 
 // Step Components - Lazy Loading for Performance
@@ -22,6 +24,8 @@ import JSZip from 'jszip';
 import { saveToHistory, getHistory, deleteFromHistory } from './utils/db';
 
 function App() {
+  const location = useLocation();
+  
   // Global State
   const [files, setFiles] = useState([]);
   const [currentStep, setCurrentStep] = useState(1);
@@ -34,8 +38,6 @@ function App() {
   const [previewFile, setPreviewFile] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
-  
-  // Splash Screen State
   const [showSplash, setShowSplash] = useState(true);
 
   // Lifecycle
@@ -49,7 +51,6 @@ function App() {
     };
   }, []);
 
-  // Database Handlers
   const refreshHistory = async () => {
     try {
       const items = await getHistory();
@@ -64,11 +65,9 @@ function App() {
     refreshHistory();
   };
 
-  // Image Processing Engine
   const processImageInWorker = useCallback((fileObj, currentSettings) => {
     return new Promise((resolve, reject) => {
       const worker = new Worker(new URL('./utils/processor.worker.js', import.meta.url), { type: 'module' });
-      
       worker.onmessage = (e) => {
         const { success, compressedBlob, compressedSize, format, error } = e.data;
         if (success) {
@@ -79,12 +78,10 @@ function App() {
         }
         worker.terminate();
       };
-
       worker.onerror = (err) => {
         reject(err);
         worker.terminate();
       };
-
       worker.postMessage({
         fileBlob: fileObj.originalFile,
         settings: currentSettings,
@@ -93,7 +90,6 @@ function App() {
     });
   }, []);
 
-  // File Handlers
   const handleFilesAdded = (newFiles) => {
     const fileEntries = newFiles.map(file => ({
       id: Math.random().toString(36).substr(2, 9),
@@ -130,14 +126,11 @@ function App() {
     setCurrentStep(1);
   };
 
-  // Optimization Trigger
   const processAll = async () => {
     setIsProcessingAll(true);
     const updatedFiles = [...files];
     const CONCURRENCY_LIMIT = 4;
-    
     const queue = [...Array(updatedFiles.length).keys()].filter(i => updatedFiles[i].status !== 'completed');
-    
     const processNext = async () => {
       if (queue.length === 0) return;
       const index = queue.shift();
@@ -157,7 +150,6 @@ function App() {
       }
       await processNext();
     };
-
     const workers = Array(Math.min(CONCURRENCY_LIMIT, queue.length)).fill(null).map(() => processNext());
     await Promise.all(workers);
     refreshHistory();
@@ -190,7 +182,6 @@ function App() {
     setCurrentStep(4);
   };
 
-  // Config
   const steps = useMemo(() => [
     { id: 1, name: 'Upload', icon: UploadIcon },
     { id: 2, name: 'Engine', icon: SettingsIcon },
@@ -223,55 +214,30 @@ function App() {
         <link rel="icon" type="image/png" href="/favicon.png" />
       </Helmet>
 
-      <Header onOpenHistory={() => setIsHistoryOpen(true)} historyCount={historyItems.length} />
-      
-      <main className="flex-1 flex flex-col pt-8 sm:pt-12 pb-12 px-4 sm:px-8 lg:px-16 overflow-hidden">
-        <div className="mx-auto w-full max-w-[1500px] flex flex-col h-full gap-8 sm:gap-12">
-          
-          <Stepper steps={steps} currentStep={currentStep} />
-
-          <div className="flex-1 relative">
-            <React.Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
-              <AnimatePresence mode="wait">
-                {currentStep === 1 && (
-                  <Step1_Upload onFilesAdded={handleFilesAdded} />
-                )}
-
-                {currentStep === 2 && (
-                  <Step2_Configure 
-                    settings={settings}
-                    onSettingsChange={(newSettings) => setSettings(prev => ({ ...prev, ...newSettings }))}
-                    onProcess={processAll}
-                    isProcessing={isProcessingAll}
-                    onClear={clearAll}
-                  />
-                )}
-
-                {currentStep === 3 && (
-                  <Step3_Review 
-                    files={files}
-                    onAdjust={() => setCurrentStep(2)}
-                    onApprove={() => setCurrentStep(4)}
-                    onRemove={removeFile}
-                    onDownload={downloadFile}
-                    onPreview={setPreviewFile}
-                  />
-                )}
-
-                {currentStep === 4 && (
-                  <Step4_Export 
-                    totalReduction={totalReduction}
-                    onDownloadAll={downloadAll}
-                    onNewProject={clearAll}
-                  />
-                )}
-              </AnimatePresence>
-            </React.Suspense>
-          </div>
-        </div>
-      </main>
-
-      <Footer />
+      <Routes location={location} key={location.pathname}>
+        <Route path="/" element={
+          <>
+            <Header onOpenHistory={() => setIsHistoryOpen(true)} historyCount={historyItems.length} />
+            <main className="flex-1 flex flex-col pt-8 sm:pt-12 pb-12 px-4 sm:px-8 lg:px-16 overflow-hidden">
+              <div className="mx-auto w-full max-w-[1500px] flex flex-col h-full gap-8 sm:gap-12">
+                <Stepper steps={steps} currentStep={currentStep} />
+                <div className="flex-1 relative">
+                  <React.Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
+                    <AnimatePresence mode="wait">
+                      {currentStep === 1 && <Step1_Upload onFilesAdded={handleFilesAdded} />}
+                      {currentStep === 2 && <Step2_Configure settings={settings} onSettingsChange={(s) => setSettings(p => ({...p, ...s}))} onProcess={processAll} isProcessing={isProcessingAll} onClear={clearAll} />}
+                      {currentStep === 3 && <Step3_Review files={files} onAdjust={() => setCurrentStep(2)} onApprove={() => setCurrentStep(4)} onRemove={removeFile} onDownload={downloadFile} onPreview={setPreviewFile} />}
+                      {currentStep === 4 && <Step4_Export totalReduction={totalReduction} onDownloadAll={downloadAll} onNewProject={clearAll} />}
+                    </AnimatePresence>
+                  </React.Suspense>
+                </div>
+              </div>
+            </main>
+            <Footer />
+          </>
+        } />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
 
       <React.Suspense fallback={null}>
         <HistoryPanel 
@@ -281,14 +247,8 @@ function App() {
           onDelete={handleDeleteHistory}
           onDownload={downloadFile}
         />
-
         <AnimatePresence>
-          {previewFile && (
-            <ImageComparison 
-              file={previewFile} 
-              onClose={() => setPreviewFile(null)} 
-            />
-          )}
+          {previewFile && <ImageComparison file={previewFile} onClose={() => setPreviewFile(null)} />}
         </AnimatePresence>
       </React.Suspense>
     </div>
